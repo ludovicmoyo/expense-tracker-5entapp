@@ -1,0 +1,24 @@
+<Project>
+  <!--
+    Replaces the SDK's Run target (Microsoft.NET.Sdk.targets:1464) with a version that
+    skips the Exec task when $(RunCommand) is empty.
+
+    Why this file exists:
+      "dotnet build -t:Run -f net10.0-maccatalyst" propagates -t:Run to every project in
+      the solution, including Lambdas and Shared which are plain .NET libraries.
+      For library projects $(RunCommand) is never set, so the default Exec fails with
+      "MSB3072: task requires a command to execute".
+
+    For the MAUI App project $(RunCommand) is set to "open" at runtime by the Mac Catalyst
+      _PrepareRunDesktop target (BeforeTargets="ComputeRunArguments"), so the Exec still
+      runs correctly and the .app bundle is opened normally.
+
+    This file is imported via AfterMicrosoftNETSdkTargets (set in Directory.Build.props)
+      so it is evaluated *after* the SDK defines its own Run target and therefore wins.
+  -->
+  <Target Name="Run" DependsOnTargets="ComputeRunArguments">
+    <Exec Condition="'$(RunCommand)' != ''"
+          Command="$(RunCommand) $(RunArguments)"
+          WorkingDirectory="$(RunWorkingDirectory)" />
+  </Target>
+</Project>

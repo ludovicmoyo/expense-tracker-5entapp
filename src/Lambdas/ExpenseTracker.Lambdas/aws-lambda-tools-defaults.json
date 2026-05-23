@@ -1,0 +1,15 @@
+{
+  "Information": [
+    "Default values for `dotnet lambda` deployment. Each Lambda function uses a different --function-handler.",
+    "Example: dotnet lambda deploy-function CreateExpense --function-handler ExpenseTracker.Lambdas::ExpenseTracker.Lambdas.Functions.CreateExpenseFunction::Handler"
+  ],
+  "profile": "default",
+  "region": "eu-north-1",
+  "configuration": "Release",
+  "framework": "net10.0",
+  "function-runtime": "dotnet10",
+  "function-memory-size": 512,
+  "function-timeout": 15,
+  "function-architecture": "arm64",
+  "environment-variables": "TABLE_NAME=ExpenseTracker;RECEIPTS_BUCKET=expense-tracker-receipts;PRESIGNED_URL_TTL_MINUTES=15"
+}

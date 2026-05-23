@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:ExpenseTracker.App.ViewModels"
+             xmlns:dto="clr-namespace:ExpenseTracker.Shared.Dtos;assembly=ExpenseTracker.Shared"
+             x:Class="ExpenseTracker.App.Views.QueuePage"
+             x:DataType="vm:QueueViewModel"
+             Title="Approval Queue">
+
+  <Grid RowDefinitions="*,Auto">
+    <RefreshView Grid.Row="0"
+                 IsRefreshing="{Binding IsRefreshing}"
+                 Command="{Binding RefreshCommand}">
+      <CollectionView ItemsSource="{Binding Items}"
+                      SelectionMode="None">
+        <CollectionView.EmptyView>
+          <VerticalStackLayout Padding="32" Spacing="8" VerticalOptions="Center">
+            <Label Text="Queue is empty"
+                   FontSize="18" FontAttributes="Bold"
+                   HorizontalOptions="Center" />
+            <Label Text="No pending or resubmitted expenses awaiting decision."
+                   Opacity="0.7" HorizontalTextAlignment="Center" />
+          </VerticalStackLayout>
+        </CollectionView.EmptyView>
+
+        <CollectionView.ItemTemplate>
+          <DataTemplate x:DataType="dto:ExpenseDto">
+            <Border Style="{StaticResource CardFrame}" Margin="12,6">
+              <Border.GestureRecognizers>
+                <TapGestureRecognizer
+                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:QueueViewModel}}, Path=OpenCommand}"
+                    CommandParameter="{Binding .}" />
+              </Border.GestureRecognizers>
+
+              <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="4">
+                <Label Grid.Row="0" Grid.Column="0"
+                       Text="{Binding Description}"
+                       FontAttributes="Bold" FontSize="16"
+                       LineBreakMode="TailTruncation" />
+                <Label Grid.Row="0" Grid.Column="1"
+                       Text="{Binding Amount, StringFormat='{0:0.00} €'}"
+                       FontAttributes="Bold" FontSize="16" />
+
+                <Label Grid.Row="1" Grid.Column="0"
+                       Text="{Binding OwnerDisplayName}"
+                       FontSize="13" Opacity="0.7" />
+                <Label Grid.Row="1" Grid.Column="1"
+                       Text="{Binding SubmittedAt, StringFormat='{0:dd MMM yyyy}'}"
+                       FontSize="12" Opacity="0.6" HorizontalOptions="End" />
+
+                <Label Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                       Text="{Binding Category}"
+                       FontSize="12" Opacity="0.6" />
+
+                <HorizontalStackLayout Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Spacing="8">
+                  <Border Style="{StaticResource StatusBadge}"
+                          BackgroundColor="{Binding Status, Converter={StaticResource StatusToColorConverter}}">
+                    <Label Style="{StaticResource StatusBadgeText}" Text="{Binding Status}" />
+                  </Border>
+                  <Border Style="{StaticResource StatusBadge}"
+                          BackgroundColor="{StaticResource Accent}"
+                          IsVisible="{Binding RequiresSeniorApproval}">
+                    <Label Style="{StaticResource StatusBadgeText}" Text="Senior approval" />
+                  </Border>
+                </HorizontalStackLayout>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </CollectionView.ItemTemplate>
+      </CollectionView>
+    </RefreshView>
+
+    <ActivityIndicator Grid.Row="0"
+                       IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}"
+                       VerticalOptions="Center" HorizontalOptions="Center" />
+
+    <Label Grid.Row="1"
+           Text="{Binding ErrorMessage}"
+           TextColor="{StaticResource Danger}"
+           Padding="16"
+           IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}" />
+  </Grid>
+</ContentPage>

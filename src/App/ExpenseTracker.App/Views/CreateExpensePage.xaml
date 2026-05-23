@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:ExpenseTracker.App.ViewModels"
+             x:Class="ExpenseTracker.App.Views.CreateExpensePage"
+             x:DataType="vm:CreateExpenseViewModel"
+             Title="New Expense">
+
+  <ScrollView>
+    <VerticalStackLayout Padding="20" Spacing="14" MaximumWidthRequest="560" HorizontalOptions="Center">
+
+      <Label Text="Amount (€)" FontAttributes="Bold" />
+      <Entry Placeholder="0.00"
+             Keyboard="Numeric"
+             Text="{Binding Amount}" />
+
+      <Label Text="Currency" FontAttributes="Bold" />
+      <Entry Text="{Binding Currency}" />
+
+      <Label Text="Category" FontAttributes="Bold" />
+      <Picker ItemsSource="{Binding Categories}"
+              SelectedItem="{Binding Category}" />
+
+      <Label Text="Description" FontAttributes="Bold" />
+      <Editor Placeholder="What is this expense for?"
+              AutoSize="TextChanges"
+              MinimumHeightRequest="100"
+              Text="{Binding Description}" />
+
+      <Label Text="A receipt photo must be attached AFTER creating the expense, from the detail screen, before you can submit it for approval."
+             FontSize="12" Opacity="0.7" Margin="0,8,0,0" />
+
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="12" Margin="0,12,0,0">
+        <Button Grid.Column="0"
+                Text="Cancel"
+                Style="{StaticResource SecondaryButton}"
+                Command="{Binding CancelCommand}" />
+        <Button Grid.Column="1"
+                Text="Save as Draft"
+                Command="{Binding SaveCommand}"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+      </Grid>
+
+      <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+      <Label Text="{Binding ErrorMessage}"
+             TextColor="{StaticResource Danger}"
+             IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}" />
+    </VerticalStackLayout>
+  </ScrollView>
+</ContentPage>

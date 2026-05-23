@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:ExpenseTracker.App.ViewModels"
+             x:Class="ExpenseTracker.App.Views.DecisionPage"
+             x:DataType="vm:DecisionViewModel"
+             Title="Review">
+
+  <ScrollView>
+    <VerticalStackLayout Padding="20" Spacing="14" MaximumWidthRequest="640" HorizontalOptions="Center">
+
+      <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+
+      <Border Style="{StaticResource CardFrame}"
+              IsVisible="{Binding Expense, Converter={StaticResource NotNullConverter}}">
+        <VerticalStackLayout Spacing="10">
+
+          <Label Text="{Binding Expense.Description}"
+                 FontSize="20" FontAttributes="Bold" />
+
+          <HorizontalStackLayout Spacing="8">
+            <Border Style="{StaticResource StatusBadge}"
+                    BackgroundColor="{Binding Expense.Status, Converter={StaticResource StatusToColorConverter}}">
+              <Label Style="{StaticResource StatusBadgeText}" Text="{Binding Expense.Status}" />
+            </Border>
+            <Border Style="{StaticResource StatusBadge}"
+                    BackgroundColor="{StaticResource Accent}"
+                    IsVisible="{Binding Expense.RequiresSeniorApproval}">
+              <Label Style="{StaticResource StatusBadgeText}" Text="Senior approval" />
+            </Border>
+          </HorizontalStackLayout>
+
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="6">
+            <Label Grid.Row="0" Grid.Column="0" Text="Amount" FontAttributes="Bold" />
+            <Label Grid.Row="0" Grid.Column="1" Text="{Binding Expense.Amount, StringFormat='{0:0.00} €'}" />
+
+            <Label Grid.Row="1" Grid.Column="0" Text="Category" FontAttributes="Bold" />
+            <Label Grid.Row="1" Grid.Column="1" Text="{Binding Expense.Category}" />
+
+            <Label Grid.Row="2" Grid.Column="0" Text="Owner" FontAttributes="Bold" />
+            <Label Grid.Row="2" Grid.Column="1" Text="{Binding Expense.OwnerDisplayName}" />
+
+            <Label Grid.Row="3" Grid.Column="0" Text="Submitted" FontAttributes="Bold" />
+            <Label Grid.Row="3" Grid.Column="1" Text="{Binding Expense.SubmittedAt, StringFormat='{0:dd MMM yyyy, HH:mm}'}" />
+          </Grid>
+        </VerticalStackLayout>
+      </Border>
+
+      <Border Style="{StaticResource CardFrame}">
+        <VerticalStackLayout Spacing="10">
+          <Label Text="Receipt" FontAttributes="Bold" FontSize="16" />
+          <Image Source="{Binding ReceiptUrl}"
+                 Aspect="AspectFit"
+                 MaximumHeightRequest="380"
+                 IsVisible="{Binding ReceiptUrl, Converter={StaticResource StringNotEmptyConverter}}" />
+          <Label Text="No receipt available."
+                 Opacity="0.7"
+                 IsVisible="{Binding ReceiptUrl, Converter={StaticResource StringEmptyConverter}}" />
+        </VerticalStackLayout>
+      </Border>
+
+      <Border Style="{StaticResource CardFrame}">
+        <VerticalStackLayout Spacing="10">
+          <Label Text="Decision comment" FontAttributes="Bold" FontSize="16" />
+          <Label Text="Required to reject. Also required to approve amounts above 500 €."
+                 FontSize="12" Opacity="0.7" />
+          <Editor Placeholder="Justification..."
+                  AutoSize="TextChanges"
+                  MinimumHeightRequest="100"
+                  Text="{Binding Comment}" />
+        </VerticalStackLayout>
+      </Border>
+
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+        <Button Grid.Column="0"
+                Text="Reject"
+                Style="{StaticResource DangerButton}"
+                Command="{Binding RejectCommand}"
+                IsVisible="{Binding CanReject}"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+        <Button Grid.Column="1"
+                Text="Approve"
+                Style="{StaticResource SuccessButton}"
+                Command="{Binding ApproveCommand}"
+                IsVisible="{Binding CanApprove}"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+      </Grid>
+
+      <Label Text="{Binding ErrorMessage}"
+             TextColor="{StaticResource Danger}"
+             IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}" />
+    </VerticalStackLayout>
+  </ScrollView>
+</ContentPage>

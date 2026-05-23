@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:ExpenseTracker.App.ViewModels"
+             x:Class="ExpenseTracker.App.Views.LoginPage"
+             x:DataType="vm:LoginViewModel"
+             Shell.NavBarIsVisible="False"
+             Title="Sign in">
+
+  <ScrollView>
+    <VerticalStackLayout Padding="32" Spacing="16" VerticalOptions="Center" MaximumWidthRequest="420" HorizontalOptions="Center">
+
+      <Label Text="Expense Tracker"
+             FontSize="32" FontAttributes="Bold"
+             HorizontalOptions="Center" />
+      <Label Text="Sign in with your demo account"
+             FontSize="14" Opacity="0.7"
+             HorizontalOptions="Center" />
+
+      <Entry Placeholder="Email"
+             Text="{Binding Email}"
+             Keyboard="Email"
+             ClearButtonVisibility="WhileEditing" />
+
+      <Entry Placeholder="Password"
+             Text="{Binding Password}"
+             IsPassword="True" />
+
+      <Button Text="Sign in"
+              Command="{Binding SignInCommand}"
+              IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+
+      <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+
+      <Label Text="{Binding ErrorMessage}"
+             TextColor="Red"
+             IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}" />
+
+      <BoxView HeightRequest="1" Color="#E5E7EB" Margin="0,16,0,8" />
+
+      <Label Text="Demo accounts (mock mode)" FontAttributes="Bold" Opacity="0.7" />
+      <Label Text="• alice@demo / demo  →  Employee" FontSize="12" Opacity="0.7" />
+      <Label Text="• charlie@demo / demo  →  Employee" FontSize="12" Opacity="0.7" />
+      <Label Text="• bob@demo / demo  →  Finance Manager" FontSize="12" Opacity="0.7" />
+    </VerticalStackLayout>
+  </ScrollView>
+</ContentPage>

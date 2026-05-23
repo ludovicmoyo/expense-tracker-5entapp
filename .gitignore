@@ -1,0 +1,50 @@
+# .NET build output
+bin/
+obj/
+out/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Restored packages / lock files
+project.lock.json
+project.fragment.lock.json
+artifacts/
+**/Properties/launchSettings.json
+
+# Rider / Visual Studio
+.idea/
+.vs/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln.iml
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# MAUI / Xamarin generated
+*.binlog
+*.svclog
+*.xcuserstate
+*.xcworkspace/
+DerivedData/
+
+# AWS deployment artifacts (étape 4)
+.aws-sam/
+samconfig.toml
+*.zip
+publish/
+
+# Local secrets / configs (never commit credentials)
+appsettings.local.json
+secrets.json
+.env
+.env.local
