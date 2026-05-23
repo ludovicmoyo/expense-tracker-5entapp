@@ -1,173 +1,244 @@
 # Expense Report Tracker
 
-Serverless expense-approval workflow built for module **5ENTAPP / E5WMD — Enterprise Software Engineering on AWS** (Master, Semester 2). Supervisor: Dr. Abdelhak TOUITI.
+**Module 5ENTAPP / E5WMD — Enterprise Software Engineering on AWS**  
+Master Semestre 2 — Encadrant : Dr. Abdelhak TOUITI
 
-A field employee photographs a receipt, submits a reimbursement request from a .NET MAUI app; a Finance Manager reviews the request and approves or rejects it with a written justification. Every state transition is enforced server-side in AWS Lambda.
+Système de gestion de notes de frais serverless sur AWS avec workflow d'approbation, authentification Cognito et interface .NET MAUI.
+
+---
+
+## Démarrage rapide
+
+### 1. Prérequis
+
+| Outil | Version min | Installation |
+|-------|-------------|--------------|
+| **Xcode** (app complète) | 15+ | App Store → chercher "Xcode" → Installer (~10 Go, 30–60 min) |
+| **.NET SDK** | 10.0 | `brew install --cask dotnet-sdk` |
+| **Workload MAUI** | dernier | `dotnet workload install maui` |
+| **Git** | quelconque | pré-installé sur macOS (`xcode-select --install` sinon) |
+
+Après installation de Xcode, **lancer Xcode une fois** (il effectue sa première configuration), puis dans un terminal :
+
+```bash
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+sudo xcodebuild -license accept
+```
+
+### 2. Cloner et restaurer
+
+```bash
+git clone https://github.com/ludovicmoyo/expense-tracker-5entapp.git
+cd expense-tracker-5entapp
+dotnet restore
+```
+
+### 3. Lancer l'application
+
+```bash
+cd src/App/ExpenseTracker.App
+dotnet build -t:Run -f net10.0-maccatalyst
+```
+
+Une fenêtre macOS native s'ouvre avec l'écran de connexion. L'application se connecte directement au **backend AWS déjà déployé** (Cognito + Lambda + DynamoDB + S3 en `eu-north-1`) — aucune configuration AWS requise.
+
+### Comptes de démonstration
+
+| Email | Mot de passe | Rôle |
+|-------|-------------|------|
+| `alice@demo` | `Demo1#@@` | Employee |
+| `charlie@demo` | `Demo1#@@` | Employee |
+| `bob@demo` | `Demo1#@@` | Finance Manager |
+
+---
+
+## Scénario de démonstration complet
+
+1. **Connexion alice@demo / Demo1#@@** → liste des notes de frais (statuts variés)
+2. **"New Expense"** → remplir montant / catégorie / description → **"Save as Draft"**
+3. Ouvrir la note → **"Attach / Replace receipt"** → sélectionner une photo
+4. **"Submit for approval"** → la note passe en `Submitted`
+5. **Sign out** → connexion **bob@demo / Demo1#@@** → la queue Finance contient la note
+6. Cliquer dessus → voir le reçu → écrire un commentaire → **Approve** ou **Reject**
+
+> **Règle métier à tester :** toute note > 500 € nécessite un commentaire obligatoire pour être approuvée. Tenter d'approuver sans commentaire déclenche une erreur `SENIOR_APPROVAL_COMMENT_REQUIRED`.
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────┐
-│  .NET MAUI (Mac Catalyst)
-│  Role-conditional UI │
-└─────────┬────────────┘
-          │ HTTPS + Bearer JWT
-          ▼
-┌──────────────────────┐         ┌──────────────────────┐
-│  Amazon Cognito      │ JWT     │  Amazon API Gateway  │
-│  User Pool           │────────▶│  (REST + Cognito     │
-│  Groups: employees,  │ claims  │   Authorizer)        │
-│  finance             │         └─────────┬────────────┘
-└──────────────────────┘                   │
-                                           ▼
-            ┌──────────────────────────────────────────┐
-            │  AWS Lambda (.NET 8, C#) — 8 functions   │
-            │  • CreateExpense  • ListMyExpenses       │
-            │  • ListSubmittedQueue • GetExpense       │
-            │  • SubmitExpense  • DecideExpense        │
-            │  • GetUploadUrl   • GetReceiptUrl        │
-            │  Shared state machine enforces workflow  │
-            └────────┬─────────────────────┬───────────┘
-                     │                     │
-                     ▼                     ▼
-        ┌────────────────────┐   ┌────────────────────┐
-        │  Amazon DynamoDB   │   │  Amazon S3         │
-        │  ExpenseTracker    │   │  Receipts bucket   │
-        │  + GSI1 + GSI2     │   │  (private, SSE)    │
-        └────────────────────┘   └────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                    .NET MAUI (Mac Catalyst)                       │
+│          Vue Employé ──── ou ──── Vue Finance Manager            │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │ HTTPS + JWT Bearer (IdToken Cognito)
+                            ▼
+            ┌───────────────────────────────┐
+            │     Amazon Cognito            │
+            │  User Pool eu-north-1         │
+            │  Groupes: employees / finance │
+            │  Auth SRP (pas de mot de      │
+            │  passe en clair sur le réseau)│
+            └───────────────┬───────────────┘
+                            │ JWT validé par Authorizer
+                            ▼
+            ┌───────────────────────────────┐
+            │    Amazon API Gateway         │
+            │  REST API — 8 routes          │
+            │  Cognito Authorizer global    │
+            │  Intégration AWS_PROXY        │
+            └───────────────┬───────────────┘
+                            │ APIGatewayProxyRequest
+                            ▼
+┌───────────────────────────────────────────────────────────────┐
+│                  AWS Lambda — .NET 10 / arm64                  │
+│                                                               │
+│  CreateExpense    ListMyExpenses    ListSubmittedQueue         │
+│  GetExpense       SubmitExpense     DecideExpense              │
+│  GetUploadUrl     GetReceiptUrl                               │
+│                                                               │
+│  → Chaque fonction lit le claim cognito:groups pour le RBAC   │
+│  → EnsureTransition() bloque toute transition illégale        │
+└──────────────────┬────────────────────┬───────────────────────┘
+                   │                    │
+                   ▼                    ▼
+   ┌───────────────────────┐  ┌─────────────────────────┐
+   │     Amazon DynamoDB   │  │       Amazon S3          │
+   │  Table: ExpenseTracker│  │  Bucket: privé           │
+   │  PK/SK + GSI1 + GSI2  │  │  Accès: pre-signed URLs  │
+   │  Single-table design  │  │  TTL: 15 min             │
+   └───────────────────────┘  └─────────────────────────┘
 ```
 
-## Repository layout
+---
+
+## Structure du dépôt
 
 ```
 .
 ├── src/
-│   ├── Shared/ExpenseTracker.Shared/      Shared contracts (DTOs, enums, state machine)
-│   ├── Lambdas/ExpenseTracker.Lambdas/    All 8 AWS Lambda handlers
-│   └── App/ExpenseTracker.App/            .NET MAUI app (Mac Catalyst)
-├── ExpenseTracker.sln
-├── Directory.Build.props
-└── README.md
+│   ├── Shared/ExpenseTracker.Shared/       DTOs, modèles, machine à états
+│   │   ├── Models/                         Expense, ExpenseStatus, UserRole…
+│   │   ├── Dtos/                           Contrats API (CreateExpenseRequest…)
+│   │   └── Workflow/
+│   │       ├── ExpenseStateMachine.cs      Table de transitions (source unique de vérité)
+│   │       └── ApprovalPolicy.cs           Règle seuil 500 €
+│   │
+│   ├── Lambdas/ExpenseTracker.Lambdas/     8 fonctions Lambda C#
+│   │   ├── Functions/                      Un fichier par Lambda
+│   │   └── Common/
+│   │       ├── UserContext.cs              Extraction RBAC depuis les claims JWT
+│   │       ├── DynamoMapper.cs             Sérialisation DynamoDB (keys + GSIs)
+│   │       ├── ExpenseRepository.cs        Accès DynamoDB
+│   │       ├── ReceiptStorage.cs           Génération pre-signed URLs S3
+│   │       └── ServiceFactory.cs           Singleton des clients AWS SDK
+│   │
+│   └── App/ExpenseTracker.App/             Interface .NET MAUI
+│       ├── Services/
+│       │   ├── CognitoAuthService.cs       Auth SRP via Amazon.Extensions.CognitoAuthentication
+│       │   ├── RealExpenseApi.cs           Appels HTTP vers API Gateway
+│       │   └── AuthorizingHttpHandler.cs   Injection du Bearer token automatique
+│       └── MauiProgram.cs                  Injection de dépendances (Cognito + API Gateway)
+│
+├── RAPPORT.md                              Rapport académique du projet
+└── README.md                               Ce fichier
 ```
 
-## Workflow
+---
+
+## Workflow des états
 
 ```
-Draft ──Submit──▶ Submitted ──Approve──▶ Approved
-                       │
-                       └──Reject──▶ Rejected ──Resubmit──▶ Resubmitted ──Approve / Reject──▶ ...
+           [Employee]              [Finance Manager]
+              │                         │
+         Submit ↓                  Approve ↓    Reject ↓
+                                        │           │
+Draft ──────────▶ Submitted ────────────▶ Approved  │
+                      │                             │
+                      └──────────────▶ Rejected ────┘
+                                          │
+                                    Resubmit ↓ [Employee]
+                                          │
+                                    Resubmitted ──▶ Approved / Rejected
 ```
 
-Every transition is encoded in `ExpenseTracker.Shared/Workflow/ExpenseStateMachine.cs`. The Lambdas call `EnsureTransition(...)` which throws `WorkflowException` if the action is not allowed for the current state, role, ownership, or comment requirement. The MAUI ViewModels call the same machine through `CanSubmit / CanApprove / CanReject / CanResubmit` to enable or hide buttons, so the UI never offers an action the server would reject.
+Toutes les transitions sont encodées dans `ExpenseStateMachine.cs`. La méthode `EnsureTransition()` est appelée **server-side** dans chaque Lambda et lève une `WorkflowException` si la transition est interdite (mauvais rôle, mauvais propriétaire, commentaire manquant). Le client ne peut pas contourner cette vérification.
 
-### Approval-threshold rule (bonus)
+---
 
-`Workflow/ApprovalPolicy.cs` enforces an additional rule: any **Approve** decision on an amount strictly greater than **500 €** requires a written justification from the Finance Manager. This addresses the *"missing approval threshold"* scenario from the project brief.
+## Modèle DynamoDB (single-table design)
 
-## DynamoDB single-table design
+**Table :** `ExpenseTracker` — région `eu-north-1`
 
-Table name: `ExpenseTracker`
+| Clé | Valeur | Description |
+|-----|--------|-------------|
+| `PK` | `USER#{ownerSub}` | Partition par utilisateur |
+| `SK` | `EXPENSE#{expenseId}` | Tri par note |
 
-| Item                | PK                       | SK                          | Notes |
-|---------------------|--------------------------|-----------------------------|-------|
-| Expense             | `USER#<ownerSub>`        | `EXPENSE#<expenseId>`       | One employee → one partition |
+### Index secondaires globaux (GSIs)
 
-### Sparse GSIs
+| Index | GSI PK | GSI SK | Rempli quand | Usage |
+|-------|--------|--------|--------------|-------|
+| **GSI1** | `STATUS#{status}` | `{submittedAt}#{expenseId}` | `Submitted` ou `Resubmitted` | File d'attente Finance (FIFO) |
+| **GSI2** | `DECIDER#{sub}` | `{decisionAt}#{expenseId}` | `Approved` ou `Rejected` | Audit par gestionnaire |
 
-| Index | PK                       | SK                                       | Populated when                | Serves                                  |
-|-------|--------------------------|------------------------------------------|-------------------------------|-----------------------------------------|
-| GSI1  | `STATUS#<status>`        | `<submittedAt iso8601>#<expenseId>`      | Status ∈ {Submitted, Resubmitted} | Finance queue (FIFO) |
-| GSI2  | `DECIDER#<deciderSub>`   | `<decisionAt iso8601>#<expenseId>`       | Status ∈ {Approved, Rejected}     | Audit per manager |
+Les GSIs sont **sparse** : un item n'apparaît dans GSI1 que lorsqu'il attend une décision, et en disparaît automatiquement quand il est traité (les attributs GSI1PK/GSI1SK ne sont pas écrits pour les autres statuts).
 
-A `DynamoMapper` centralises the key shape so it cannot drift across functions; the sparse pattern means the queue index contains *only* what is actually awaiting decision.
+---
 
-### Access patterns covered
+## Routes API Gateway
 
-| Use case                                | Operation                                              |
-|-----------------------------------------|--------------------------------------------------------|
-| Employee lists own expenses             | `Query PK = USER#<sub>, SK begins_with EXPENSE#`       |
-| Employee or Finance reads one expense   | `GetItem PK = USER#<sub>, SK = EXPENSE#<id>`           |
-| Finance lists submitted/resubmitted     | `Query GSI1PK = STATUS#Submitted` (or `Resubmitted`)   |
-| Audit of decisions per Finance Manager  | `Query GSI2PK = DECIDER#<sub>`                          |
+**Base URL :** `https://aqervpkypa.execute-api.eu-north-1.amazonaws.com/dev/`  
+**Authorizer :** Cognito User Pool `eu-north-1_5Gh4yACKF` sur toutes les routes
 
-## REST endpoints
+| Méthode | Route | Rôle requis | Lambda |
+|---------|-------|-------------|--------|
+| `POST` | `/expenses` | employees | `CreateExpenseFunction` |
+| `GET` | `/expenses` | employees | `ListMyExpensesFunction` |
+| `GET` | `/expenses/queue` | finance | `ListSubmittedQueueFunction` |
+| `GET` | `/expenses/{id}` | employees (owner) ou finance + `?ownerSub` | `GetExpenseFunction` |
+| `POST` | `/expenses/{id}/submit` | employees (owner) | `SubmitExpenseFunction` |
+| `POST` | `/expenses/{id}/decision` | finance + `?ownerSub` | `DecideExpenseFunction` |
+| `POST` | `/expenses/{id}/receipt-upload-url` | employees (owner) | `GetUploadUrlFunction` |
+| `GET` | `/expenses/{id}/receipt-url` | employees (owner) ou finance | `GetReceiptUrlFunction` |
 
-| Method | Path | Authorized role | Lambda |
-|--------|------|------------------|--------|
-| POST   | `/expenses` | employees | `CreateExpenseFunction` |
-| GET    | `/expenses` | employees | `ListMyExpensesFunction` |
-| GET    | `/expenses/queue` | finance | `ListSubmittedQueueFunction` |
-| GET    | `/expenses/{id}` | employees (owner) or finance + `?ownerSub` | `GetExpenseFunction` |
-| POST   | `/expenses/{id}/submit` | employees (owner) | `SubmitExpenseFunction` |
-| POST   | `/expenses/{id}/decision` | finance + `?ownerSub` | `DecideExpenseFunction` |
-| POST   | `/expenses/{id}/receipt-upload-url` | employees (owner) | `GetUploadUrlFunction` |
-| GET    | `/expenses/{id}/receipt-url` | employees (owner) or finance + `?ownerSub` | `GetReceiptUrlFunction` |
+---
 
-All routes sit behind an API Gateway **Cognito Authorizer** that validates the JWT before the Lambda runs. The Lambda then reads `cognito:groups` and `sub` from the injected claims via `UserContext.From(request)`.
+## Upload de justificatifs (S3 pre-signed URLs)
 
-## Receipts: never public
+Le bucket S3 est **entièrement privé** (Block Public Access activé). Le flow est en deux étapes :
 
-S3 bucket access is fully private. The MAUI app:
-
-1. Calls `POST /expenses/{id}/receipt-upload-url` → Lambda returns a short-lived (≤ 15 min) **pre-signed PUT URL**.
-2. Uploads the photo directly to S3 against that URL — does not transit through Lambda or API Gateway.
-3. Calls `GET /expenses/{id}/receipt-url` to display the receipt → Lambda returns a short-lived **pre-signed GET URL**.
-
-The Lambda enforces ownership and editability before signing (the bucket itself has Block-Public-Access enabled).
-
-## Prerequisites
-
-- **.NET 8 SDK** (`brew install --cask dotnet-sdk` on macOS)
-- **MAUI workload**: `dotnet workload install maui`
-- **Xcode** (required for the Mac Catalyst target)
-- For Step 4 deployment: AWS CLI configured (`aws configure`)
-
-## Running locally — no AWS needed
-
-The app ships with a complete on-device mock backend (`InMemoryMockApi` + `MockAuthService`) that re-uses the **same** `ExpenseStateMachine` and `ApprovalPolicy` as the Lambdas. The mock flag lives at the top of `MauiProgram.cs`:
-
-```csharp
-private const bool UseMockBackend = true;
+```
+App ──POST /receipt-upload-url──▶ Lambda ──GeneratePreSignedPUT──▶ S3
+App ◀── { uploadUrl, s3Key } ─────────────────────────────────────
+App ──PUT uploadUrl (direct S3, sans passer par API Gateway)────▶ S3
 ```
 
-Build and launch on Mac Catalyst:
+L'application envoie le fichier directement à S3 via l'URL pré-signée (valide 15 min). Lambda persiste la clé S3 dans DynamoDB immédiatement — `SubmitExpense` vérifie que la clé est présente avant d'autoriser la soumission.
 
+---
+
+## Problèmes fréquents
+
+**Xcode non trouvé :**
 ```bash
-cd src/App/ExpenseTracker.App
-dotnet build -f net8.0-maccatalyst
-dotnet build -t:Run -f net8.0-maccatalyst
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 ```
 
-### Demo accounts (mock mode)
-
-| Email            | Password | Role             |
-|------------------|----------|------------------|
-| `alice@demo`     | `demo`   | Employee         |
-| `charlie@demo`   | `demo`   | Employee         |
-| `bob@demo`       | `demo`   | Finance Manager  |
-
-When Alice signs in, she sees five pre-seeded expenses across all statuses (Draft, Submitted, Rejected, plus a 1 200 € item that triggers the senior-approval badge). When Bob signs in, the queue lists everything currently awaiting decision.
-
-## Deploying to AWS (Step 4 — to be completed)
-
-1. Create the DynamoDB table `ExpenseTracker` with `PK` + `SK`, plus GSIs `GSI1` and `GSI2`.
-2. Create the S3 bucket (Block Public Access **on**, SSE-S3 default, CORS on `PUT/GET`).
-3. Create the Cognito User Pool, two groups (`employees`, `finance`), and an app client.
-4. Deploy each Lambda with `dotnet lambda deploy-function` using the handler names listed below, scoped IAM roles (least privilege per function), and the environment variables `TABLE_NAME`, `RECEIPTS_BUCKET`, `PRESIGNED_URL_TTL_MINUTES`.
-5. Wire the API Gateway REST API with a Cognito Authorizer, then point each route to its Lambda integration.
-6. In `MauiProgram.cs`, flip `UseMockBackend = false` and fill in the `CognitoConfig` and `ApiConfig` values.
-
-Lambda handler entry points:
-
+**MAUI workload manquant :**
+```bash
+dotnet workload install maui
 ```
-ExpenseTracker.Lambdas::ExpenseTracker.Lambdas.Functions.CreateExpenseFunction::Handler
-ExpenseTracker.Lambdas::ExpenseTracker.Lambdas.Functions.ListMyExpensesFunction::Handler
-ExpenseTracker.Lambdas::ExpenseTracker.Lambdas.Functions.ListSubmittedQueueFunction::Handler
-ExpenseTracker.Lambdas::ExpenseTracker.Lambdas.Functions.GetExpenseFunction::Handler
-ExpenseTracker.Lambdas::ExpenseTracker.Lambdas.Functions.SubmitExpenseFunction::Handler
-ExpenseTracker.Lambdas::ExpenseTracker.Lambdas.Functions.DecideExpenseFunction::Handler
-ExpenseTracker.Lambdas::ExpenseTracker.Lambdas.Functions.GetUploadUrlFunction::Handler
-ExpenseTracker.Lambdas::ExpenseTracker.Lambdas.Functions.GetReceiptUrlFunction::Handler
+
+**`dotnet : command not found` après installation brew :**
+```bash
+# Ajouter au ~/.zshrc puis relancer le terminal
+export PATH="$PATH:/usr/local/share/dotnet"
+```
+
+**Vérifier que le backend compile sans Xcode :**
+```bash
+dotnet build src/Shared/ExpenseTracker.Shared/ExpenseTracker.Shared.csproj
+dotnet build src/Lambdas/ExpenseTracker.Lambdas/ExpenseTracker.Lambdas.csproj
 ```
