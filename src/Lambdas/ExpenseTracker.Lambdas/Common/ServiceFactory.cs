@@ -23,12 +23,17 @@ public static class ServiceFactory
             Environment.GetEnvironmentVariable("PRESIGNED_URL_TTL_MINUTES"),
             out var m) ? m : 15);
 
-    private static readonly Amazon.RegionEndpoint _region =
+    private static readonly Amazon.RegionEndpoint _dynamoRegion =
         Amazon.RegionEndpoint.GetBySystemName(
             Environment.GetEnvironmentVariable("AWS_REGION") ?? "eu-north-1");
 
-    private static readonly Lazy<IAmazonDynamoDB> _dynamo = new(() => new AmazonDynamoDBClient(_region));
-    private static readonly Lazy<IAmazonS3> _s3 = new(() => new AmazonS3Client(_region));
+    // S3_REGION must match the bucket's actual region (separate from Lambda runtime region).
+    private static readonly Amazon.RegionEndpoint _s3Region =
+        Amazon.RegionEndpoint.GetBySystemName(
+            Environment.GetEnvironmentVariable("S3_REGION") ?? "us-east-1");
+
+    private static readonly Lazy<IAmazonDynamoDB> _dynamo = new(() => new AmazonDynamoDBClient(_dynamoRegion));
+    private static readonly Lazy<IAmazonS3> _s3 = new(() => new AmazonS3Client(_s3Region));
 
     public static IAmazonDynamoDB Dynamo => _dynamo.Value;
     public static IAmazonS3 S3 => _s3.Value;
